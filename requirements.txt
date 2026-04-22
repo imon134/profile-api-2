@@ -1,0 +1,6 @@
+Django
+httpx
+psycopg2-binary
+dj-database-url
+uuid7
+gunicorn
