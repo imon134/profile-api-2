@@ -16,15 +16,15 @@ class Command(BaseCommand):
     def handle(self, *args, **kwargs):
 
         # ✅ Only download if file does NOT exist
-        if not os.path.exists(LOCAL_FILE):
-            self.stdout.write("Downloading dataset...")
-            gdown.download(URL, LOCAL_FILE, quiet=False)
-        else:
-            self.stdout.write("Using cached dataset...")
+        #if not os.path.exists(LOCAL_FILE):
+            #self.stdout.write("Downloading dataset...")
+            #gdown.download(URL, LOCAL_FILE, quiet=False)
+        #else:
+            #self.stdout.write("Using cached dataset...")
 
-        self.stdout.write("Loading dataset...")
+        #self.stdout.write("Loading dataset...")
 
-        with open(LOCAL_FILE, "r") as f:
+        with open("profiles/data/profiles.json", "r") as f:
             data = json.load(f)
 
         profiles = data["profiles"]
