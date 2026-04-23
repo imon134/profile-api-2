@@ -1,7 +1,7 @@
 from django.http import JsonResponse
 from django.db.models import Q
 from .models import Profile
-from profiles.utils.ensure_seed import ensure_seed
+from .utils.ensure_seed import ensure_seed
 
 
 # -------------------------
