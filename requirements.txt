@@ -3,3 +3,4 @@ psycopg2-binary
 dj-database-url
 gunicorn
 whitenoise
+django-cors-headers
