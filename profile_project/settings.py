@@ -2,7 +2,9 @@ import os
 import dj_database_url
 from pathlib import Path
 
-SECRET_KEY = os.environ.get("SECRET_KEY", "dev-key")
+# Security: Use environment variable or fallback (development only)
+SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-dev-key-change-in-production")
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 ROOT_URLCONF = "profile_project.urls"
 
