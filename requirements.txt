@@ -5,4 +5,5 @@ gunicorn
 whitenoise
 requests
 djangorestframework
+drf-spectacular
 django-cors-headers

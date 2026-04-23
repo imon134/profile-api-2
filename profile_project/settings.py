@@ -33,8 +33,9 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
 
-    "corsheaders",   # ✅ MUST exist
-    "rest_framework",  # ✅ Django REST Framework added
+    "corsheaders",
+    "rest_framework",
+    "drf_spectacular",
     "profiles",
 ]
 
@@ -52,6 +53,19 @@ ALLOWED_HOSTS = ["*"]
 
 CORS_ALLOW_ALL_ORIGINS = True
 
+REST_FRAMEWORK = {
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Insighta Labs Profiles API",
+    "DESCRIPTION": "Demographic profile search and query API with filtering, sorting, pagination, and natural language search.",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+}
+
 DATABASES = {
-    "default": dj_database_url.config(default=os.environ.get("DATABASE_URL"))
+    "default": dj_database_url.config(
+        default=f"sqlite:///{os.path.join(BASE_DIR, 'db.sqlite3')}"
+    )
 }
