@@ -1,205 +1,221 @@
-import re
 from django.http import JsonResponse
+from django.db.models import Q
 from .models import Profile
+from profiles.utils.ensure_seed import ensure_seed
 
 
-# ---------------- HELPER ----------------
-def error(message, status_code):
+# -------------------------
+# Helpers
+# -------------------------
+
+def error(message, status=400):
     return JsonResponse(
         {"status": "error", "message": message},
-        status=status_code
+        status=status
     )
 
 
-# ---------------- GET PROFILES ----------------
+def validate_int(value):
+    try:
+        return int(value)
+    except:
+        return None
+
+
+def validate_float(value):
+    try:
+        return float(value)
+    except:
+        return None
+
+
+# -------------------------
+# GET /api/profiles
+# -------------------------
 def get_profiles(request):
-    try:
-        qs = Profile.objects.all()
+    ensure_seed()
 
-        # ---------- FILTERS ----------
-        gender = request.GET.get("gender")
-        if gender:
-            qs = qs.filter(gender=gender)
+    qs = Profile.objects.all()
 
-        age_group = request.GET.get("age_group")
-        if age_group:
-            qs = qs.filter(age_group=age_group)
+    # ---------------- FILTERS ----------------
+    gender = request.GET.get("gender")
+    if gender:
+        qs = qs.filter(gender=gender)
 
-        country_id = request.GET.get("country_id")
-        if country_id:
-            qs = qs.filter(country_id=country_id)
+    age_group = request.GET.get("age_group")
+    if age_group:
+        qs = qs.filter(age_group=age_group)
 
-        min_age = request.GET.get("min_age")
-        if min_age:
-            qs = qs.filter(age__gte=int(min_age))
+    country_id = request.GET.get("country_id")
+    if country_id:
+        qs = qs.filter(country_id=country_id)
 
-        max_age = request.GET.get("max_age")
-        if max_age:
-            qs = qs.filter(age__lte=int(max_age))
-
-        min_gp = request.GET.get("min_gender_probability")
-        if min_gp:
-            qs = qs.filter(gender_probability__gte=float(min_gp))
-
-        min_cp = request.GET.get("min_country_probability")
-        if min_cp:
-            qs = qs.filter(country_probability__gte=float(min_cp))
-
-        # ---------- SORTING ----------
-        sort_by = request.GET.get("sort_by", "created_at")
-        order = request.GET.get("order", "asc")
-
-        allowed_sort = ["age", "created_at", "gender_probability"]
-
-        if sort_by not in allowed_sort:
+    min_age = request.GET.get("min_age")
+    if min_age:
+        min_age = validate_int(min_age)
+        if min_age is None:
             return error("Invalid query parameters", 422)
+        qs = qs.filter(age__gte=min_age)
 
-        if order not in ["asc", "desc"]:
+    max_age = request.GET.get("max_age")
+    if max_age:
+        max_age = validate_int(max_age)
+        if max_age is None:
             return error("Invalid query parameters", 422)
+        qs = qs.filter(age__lte=max_age)
 
-        if order == "desc":
-            sort_by = "-" + sort_by
-
-        qs = qs.order_by(sort_by)
-
-        # ---------- PAGINATION ----------
-        page = request.GET.get("page", "1")
-        limit = request.GET.get("limit", "10")
-
-        if not page.isdigit() or not limit.isdigit():
+    min_gp = request.GET.get("min_gender_probability")
+    if min_gp:
+        min_gp = validate_float(min_gp)
+        if min_gp is None:
             return error("Invalid query parameters", 422)
+        qs = qs.filter(gender_probability__gte=min_gp)
 
-        page = max(int(page), 1)
-        limit = min(int(limit), 50)
+    min_cp = request.GET.get("min_country_probability")
+    if min_cp:
+        min_cp = validate_float(min_cp)
+        if min_cp is None:
+            return error("Invalid query parameters", 422)
+        qs = qs.filter(country_probability__gte=min_cp)
 
-        start = (page - 1) * limit
-        end = start + limit
+    # ---------------- SORTING ----------------
+    sort_by = request.GET.get("sort_by", "created_at")
+    order = request.GET.get("order", "asc")
 
-        total = qs.count()
+    allowed = ["age", "created_at", "gender_probability"]
 
-        data = list(qs[start:end].values(
-            "id",
-            "name",
-            "gender",
-            "gender_probability",
-            "age",
-            "age_group",
-            "country_id",
-            "country_name",
-            "country_probability",
-            "created_at"
-        ))
+    if sort_by not in allowed:
+        return error("Invalid query parameters", 422)
 
-        return JsonResponse({
-            "status": "success",
-            "page": page,
-            "limit": limit,
-            "total": total,
-            "data": data
-        })
+    if order not in ["asc", "desc"]:
+        return error("Invalid query parameters", 422)
 
-    except Exception:
-        return error("Server failure", 500)
+    if order == "desc":
+        sort_by = "-" + sort_by
+
+    qs = qs.order_by(sort_by)
+
+    # ---------------- PAGINATION ----------------
+    page = validate_int(request.GET.get("page", 1))
+    limit = validate_int(request.GET.get("limit", 10))
+
+    if page is None or page < 1:
+        return error("Invalid query parameters", 422)
+
+    if limit is None or limit < 1:
+        return error("Invalid query parameters", 422)
+
+    if limit > 50:
+        limit = 50
+
+    start = (page - 1) * limit
+    end = start + limit
+
+    total = qs.count()
+
+    return JsonResponse({
+        "status": "success",
+        "page": page,
+        "limit": limit,
+        "total": total,
+        "data": list(qs[start:end].values())
+    })
 
 
-# ---------------- SEARCH (NATURAL LANGUAGE) ----------------
+# -------------------------
+# GET /api/profiles/search
+# -------------------------
 def search_profiles(request):
-    try:
-        q = request.GET.get("q", "").lower().strip()
+    ensure_seed()
 
-        if not q:
-            return error("Missing query parameter", 400)
+    q = request.GET.get("q", "").lower().strip()
 
-        qs = Profile.objects.all()
+    if not q:
+        return error("Missing or empty parameter", 400)
 
-        # ---------- RULE BASED PARSING ----------
+    qs = Profile.objects.all()
 
-        # gender
-        if "male" in q and "female" not in q:
-            qs = qs.filter(gender="male")
-        elif "female" in q:
-            qs = qs.filter(gender="female")
+    parsed = False
 
-        # age groups
-        if "child" in q:
-            qs = qs.filter(age_group="child")
-        elif "teenager" in q:
-            qs = qs.filter(age_group="teenager")
-        elif "adult" in q:
-            qs = qs.filter(age_group="adult")
-        elif "senior" in q:
-            qs = qs.filter(age_group="senior")
+    # ---------------- RULE-BASED PARSING ----------------
 
-        # "young" rule
-        if "young" in q:
-            qs = qs.filter(age__gte=16, age__lte=24)
+    # gender
+    if "male" in q:
+        qs = qs.filter(gender="male")
+        parsed = True
 
-        # age conditions
-        above = re.search(r"above (\d+)", q)
-        if above:
-            qs = qs.filter(age__gte=int(above.group(1)))
+    if "female" in q:
+        qs = qs.filter(gender="female")
+        parsed = True
 
-        below = re.search(r"below (\d+)", q)
-        if below:
-            qs = qs.filter(age__lte=int(below.group(1)))
+    # age groups
+    if "child" in q:
+        qs = qs.filter(age_group="child")
+        parsed = True
 
-        # country mapping
-        countries = {
-            "nigeria": "NG",
-            "ghana": "GH",
-            "kenya": "KE",
-            "angola": "AO",
-            "uganda": "UG",
-            "tanzania": "TZ"
-        }
+    if "teenager" in q:
+        qs = qs.filter(age_group="teenager")
+        parsed = True
 
-        matched_country = False
-        for k, v in countries.items():
-            if k in q:
-                qs = qs.filter(country_id=v)
-                matched_country = True
+    if "adult" in q:
+        qs = qs.filter(age_group="adult")
+        parsed = True
 
-        # if nothing matched at all
-        if not matched_country and "male" not in q and "female" not in q \
-           and "young" not in q and not above and not below:
-            return error("Unable to interpret query", 422)
+    if "senior" in q:
+        qs = qs.filter(age_group="senior")
+        parsed = True
 
-        # ---------- PAGINATION ----------
-        page = request.GET.get("page", "1")
-        limit = request.GET.get("limit", "10")
+    # country mapping (basic ISO examples)
+    country_map = {
+        "nigeria": "NG",
+        "kenya": "KE",
+        "ghana": "GH",
+        "angola": "AO",
+        "uganda": "UG",
+        "tanzania": "TZ",
+        "benin": "BJ",
+    }
 
-        if not page.isdigit() or not limit.isdigit():
-            return error("Invalid query parameters", 422)
+    for k, v in country_map.items():
+        if k in q:
+            qs = qs.filter(country_id=v)
+            parsed = True
 
-        page = max(int(page), 1)
-        limit = min(int(limit), 50)
+    # age rules
+    if "young" in q:
+        qs = qs.filter(age__gte=16, age__lte=24)
+        parsed = True
 
-        start = (page - 1) * limit
-        end = start + limit
+    if "above" in q:
+        import re
+        match = re.search(r"above (\d+)", q)
+        if match:
+            qs = qs.filter(age__gte=int(match.group(1)))
+            parsed = True
 
-        if not qs.exists():
-            return error("Profile not found", 404)
+    # ---------------- IF NOTHING MATCHED ----------------
+    if not parsed:
+        return error("Unable to interpret query", 422)
 
-        data = list(qs[start:end].values(
-            "id",
-            "name",
-            "gender",
-            "gender_probability",
-            "age",
-            "age_group",
-            "country_id",
-            "country_name",
-            "country_probability",
-            "created_at"
-        ))
+    # ---------------- PAGINATION ----------------
+    page = validate_int(request.GET.get("page", 1))
+    limit = validate_int(request.GET.get("limit", 10))
 
-        return JsonResponse({
-            "status": "success",
-            "page": page,
-            "limit": limit,
-            "total": qs.count(),
-            "data": data
-        })
+    if page is None or limit is None:
+        return error("Invalid query parameters", 422)
 
-    except Exception:
-        return error("Server failure", 500)
+    if limit > 50:
+        limit = 50
+
+    start = (page - 1) * limit
+    end = start + limit
+
+    total = qs.count()
+
+    return JsonResponse({
+        "status": "success",
+        "page": page,
+        "limit": limit,
+        "total": total,
+        "data": list(qs[start:end].values())
+    })
