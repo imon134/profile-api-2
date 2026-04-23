@@ -4,4 +4,5 @@ dj-database-url
 gunicorn
 whitenoise
 requests
+djangorestframework
 django-cors-headers

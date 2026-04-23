@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
 
     "corsheaders",   # ✅ MUST exist
+    "rest_framework",  # ✅ Django REST Framework added
     "profiles",
 ]
 
