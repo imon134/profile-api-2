@@ -3,24 +3,33 @@ from ..data_seed import PROFILES_DATA
 
 
 def ensure_seed():
-    if Profile.objects.exists():
-        return
+    try:
+        if Profile.objects.exists():
+            return
 
-    objs = []
+        objs = []
 
-    for p in PROFILES_DATA["profiles"]:
-        try:
-            objs.append(Profile(
-                name=str(p["name"]).strip().lower(),
-                gender=p["gender"],
-                gender_probability=float(p["gender_probability"]),
-                age=int(p["age"]),
-                age_group=p["age_group"],
-                country_id=p["country_id"],
-                country_name=p["country_name"],
-                country_probability=float(p["country_probability"]),
-            ))
-        except:
-            continue
+        for p in PROFILES_DATA.get("profiles", []):
+            if not isinstance(p, dict):
+                continue
 
-    Profile.objects.bulk_create(objs)
+            try:
+                objs.append(Profile(
+                    name=str(p.get("name", "")).strip().lower(),
+                    gender=str(p.get("gender", "")).lower(),
+                    gender_probability=float(p.get("gender_probability", 0)),
+                    age=int(p.get("age", 0)),
+                    age_group=str(p.get("age_group", "")).lower(),
+                    country_id=str(p.get("country_id", "")).upper(),
+                    country_name=str(p.get("country_name", "")),
+                    country_probability=float(p.get("country_probability", 0)),
+                ))
+            except:
+                continue
+
+        if objs:
+            Profile.objects.bulk_create(objs)
+
+    except Exception:
+        # NEVER break request pipeline
+        pass

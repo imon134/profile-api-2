@@ -2,19 +2,27 @@ from django.http import JsonResponse
 
 
 def success(data, pagination=None):
-    res = {"data": data}
+    payload = {"data": data}
+
     if pagination:
-        res["pagination"] = pagination
-    return JsonResponse(res)
+        payload["pagination"] = {
+            "page": int(pagination["page"]),
+            "limit": int(pagination["limit"]),
+            "total": int(pagination["total"]),
+            "pages": int(pagination["pages"]),
+        }
+
+    return JsonResponse(payload, json_dumps_params={"ensure_ascii": False})
 
 
 def error(code, message, status=400):
     return JsonResponse(
         {
             "error": {
-                "code": code,
-                "message": message
+                "code": str(code),
+                "message": str(message)
             }
         },
-        status=status
+        status=status,
+        json_dumps_params={"ensure_ascii": False}
     )
