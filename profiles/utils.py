@@ -3,7 +3,7 @@ import random
 from datetime import datetime, timezone
 import httpx
 
-def uuid_v7():
+def uuid7():
     ts = int(time.time() * 1000)
     rand = random.getrandbits(80)
     return f"{ts:012x}-{rand:020x}"
