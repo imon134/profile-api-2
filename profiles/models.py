@@ -2,8 +2,13 @@ import uuid
 from django.db import models
 
 
+def uuid7():
+    # safe fallback (Django-friendly, Vercel-safe)
+    return uuid.uuid4()
+
+
 class Profile(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    id = models.UUIDField(primary_key=True, default=uuid7, editable=False)
 
     name = models.CharField(max_length=255, unique=True)
 
