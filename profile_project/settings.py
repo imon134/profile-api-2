@@ -23,6 +23,7 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.middleware.common.CommonMiddleware",
+    "profiles.middleware.SimpleCORS",
 ]
 
 ROOT_URLCONF = "profile_project.urls"

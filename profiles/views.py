@@ -20,92 +20,107 @@ def cors(response):
 
 # ---------------- GET ALL PROFILES ----------------
 def get_profiles(request):
-
-    if request.method != "GET":
-        return cors(error("Method not allowed", 405))
-
     try:
+        qs = Profile.objects.all()
+
+        # ---------------- FILTERS ----------------
         gender = request.GET.get("gender")
+        if gender:
+            qs = qs.filter(gender=gender)
+
         age_group = request.GET.get("age_group")
+        if age_group:
+            qs = qs.filter(age_group=age_group)
+
         country_id = request.GET.get("country_id")
+        if country_id:
+            qs = qs.filter(country_id=country_id)
 
         min_age = request.GET.get("min_age")
+        if min_age is not None:
+            try:
+                qs = qs.filter(age__gte=int(min_age))
+            except ValueError:
+                return JsonResponse(
+                    {"status": "error", "message": "Invalid query parameters"},
+                    status=422
+                )
+
         max_age = request.GET.get("max_age")
+        if max_age is not None:
+            try:
+                qs = qs.filter(age__lte=int(max_age))
+            except ValueError:
+                return JsonResponse(
+                    {"status": "error", "message": "Invalid query parameters"},
+                    status=422
+                )
 
-        min_gender_probability = request.GET.get("min_gender_probability")
-        min_country_probability = request.GET.get("min_country_probability")
+        min_gender_prob = request.GET.get("min_gender_probability")
+        if min_gender_prob is not None:
+            try:
+                qs = qs.filter(gender_probability__gte=float(min_gender_prob))
+            except ValueError:
+                return JsonResponse(
+                    {"status": "error", "message": "Invalid query parameters"},
+                    status=422
+                )
 
+        min_country_prob = request.GET.get("min_country_probability")
+        if min_country_prob is not None:
+            try:
+                qs = qs.filter(country_probability__gte=float(min_country_prob))
+            except ValueError:
+                return JsonResponse(
+                    {"status": "error", "message": "Invalid query parameters"},
+                    status=422
+                )
+
+        # ---------------- SORTING ----------------
         sort_by = request.GET.get("sort_by", "created_at")
         order = request.GET.get("order", "asc")
 
-        page = int(request.GET.get("page", 1))
-        limit = min(int(request.GET.get("limit", 10)), 50)
+        allowed_sort_fields = ["age", "created_at", "gender_probability"]
 
-    except:
-        return cors(error("Invalid query parameters", 422))
+        if sort_by not in allowed_sort_fields:
+            sort_by = "created_at"
 
-    qs = Profile.objects.all()
+        if order == "desc":
+            sort_by = "-" + sort_by
 
-    # FILTERS (ALL COMBINABLE)
-    if gender:
-        qs = qs.filter(gender=gender)
+        qs = qs.order_by(sort_by)
 
-    if age_group:
-        qs = qs.filter(age_group=age_group)
+        # ---------------- PAGINATION ----------------
+        try:
+            page = int(request.GET.get("page", 1))
+            limit = int(request.GET.get("limit", 10))
+        except ValueError:
+            return JsonResponse(
+                {"status": "error", "message": "Invalid query parameters"},
+                status=422
+            )
 
-    if country_id:
-        qs = qs.filter(country_id=country_id)
+        limit = min(limit, 50)
+        start = (page - 1) * limit
+        end = start + limit
 
-    if min_age:
-        qs = qs.filter(age__gte=min_age)
+        total = qs.count()
+        data = list(qs[start:end].values())
 
-    if max_age:
-        qs = qs.filter(age__lte=max_age)
+        # ---------------- RESPONSE ----------------
+        return JsonResponse({
+            "status": "success",
+            "page": page,
+            "limit": limit,
+            "total": total,
+            "data": data
+        })
 
-    if min_gender_probability:
-        qs = qs.filter(gender_probability__gte=min_gender_probability)
-
-    if min_country_probability:
-        qs = qs.filter(country_probability__gte=min_country_probability)
-
-    # SORTING
-    allowed = ["age", "created_at", "gender_probability"]
-    if sort_by not in allowed:
-        sort_by = "created_at"
-
-    if order == "desc":
-        sort_by = "-" + sort_by
-
-    qs = qs.order_by(sort_by)
-
-    # PAGINATION (NO FULL SCAN)
-    total = qs.count()
-    start = (page - 1) * limit
-    end = start + limit
-
-    data = qs[start:end]
-
-    return cors(JsonResponse({
-        "status": "success",
-        "page": page,
-        "limit": limit,
-        "total": total,
-        "data": [
-            {
-                "id": str(p.id),
-                "name": p.name,
-                "gender": p.gender,
-                "gender_probability": p.gender_probability,
-                "age": p.age,
-                "age_group": p.age_group,
-                "country_id": p.country_id,
-                "country_name": p.country_name,
-                "country_probability": p.country_probability,
-                "created_at": p.created_at.isoformat()
-            }
-            for p in data
-        ]
-    }))
+    except Exception:
+        return JsonResponse(
+            {"status": "error", "message": "Server failure"},
+            status=500
+        )
 
 def parse_query(q):
 
@@ -160,49 +175,46 @@ def parse_query(q):
 
 
 def search_profiles(request):
-
-    q = request.GET.get("q")
+    q = request.GET.get("q", "").lower().strip()
 
     if not q:
-        return cors(error("Missing or empty parameter", 400))
-
-    parsed = parse_query(q)
-
-    if not parsed:
-        return cors(error("Unable to interpret query", 400))
+        return JsonResponse({"status": "error", "message": "Missing or empty parameter"}, status=400)
 
     qs = Profile.objects.all()
 
-    if "gender" in parsed:
-        qs = qs.filter(gender=parsed["gender"])
+    # RULES
+    if "young" in q:
+        qs = qs.filter(age__gte=16, age__lte=24)
 
-    if "country_id" in parsed:
-        qs = qs.filter(country_id=parsed["country_id"])
+    if "male" in q:
+        qs = qs.filter(gender="male")
 
-    if "age_group" in parsed:
-        qs = qs.filter(age_group=parsed["age_group"])
+    if "female" in q:
+        qs = qs.filter(gender="female")
 
-    if "min_age" in parsed:
-        qs = qs.filter(age__gte=parsed["min_age"])
+    if "angola" in q:
+        qs = qs.filter(country_id="AO")
 
-    if "max_age" in parsed:
-        qs = qs.filter(age__lte=parsed["max_age"])
+    if "nigeria" in q:
+        qs = qs.filter(country_id="NG")
 
-    return cors(JsonResponse({
+    if "adult" in q:
+        qs = qs.filter(age_group="adult")
+
+    if "teen" in q:
+        qs = qs.filter(age_group="teenager")
+
+    # pagination
+    page = int(request.GET.get("page", 1))
+    limit = min(int(request.GET.get("limit", 10)), 50)
+
+    start = (page - 1) * limit
+    end = start + limit
+
+    return JsonResponse({
         "status": "success",
-        "data": [
-            {
-                "id": str(p.id),
-                "name": p.name,
-                "gender": p.gender,
-                "gender_probability": p.gender_probability,
-                "age": p.age,
-                "age_group": p.age_group,
-                "country_id": p.country_id,
-                "country_name": p.country_name,
-                "country_probability": p.country_probability,
-                "created_at": p.created_at.isoformat()
-            }
-            for p in qs
-        ]
-    }))
+        "page": page,
+        "limit": limit,
+        "total": qs.count(),
+        "data": list(qs[start:end].values())
+    })
