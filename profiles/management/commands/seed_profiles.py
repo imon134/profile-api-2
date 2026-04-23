@@ -1,7 +1,6 @@
 import os
 import json
 import gdown
-from django.db import transaction
 from django.core.management.base import BaseCommand
 from profiles.models import Profile
 from profiles.utils import uuid7
@@ -12,58 +11,49 @@ LOCAL_FILE = "profiles_seed.json"
 
 
 class Command(BaseCommand):
-    help = "Fast seed profiles"
+    help = "Seed profiles database from Google Drive file"
 
     def handle(self, *args, **kwargs):
 
-        # ---------------- DOWNLOAD ONCE ----------------
+        # ✅ Only download if file does NOT exist
         if not os.path.exists(LOCAL_FILE):
             self.stdout.write("Downloading dataset...")
             gdown.download(URL, LOCAL_FILE, quiet=False)
         else:
             self.stdout.write("Using cached dataset...")
 
-        # ---------------- FAST JSON LOAD ----------------
-        self.stdout.write("Loading dataset into memory...")
-        with open(LOCAL_FILE, "r", encoding="utf-8") as f:
+        self.stdout.write("Loading dataset...")
+
+        with open(LOCAL_FILE, "r") as f:
             data = json.load(f)
 
-        profiles = data.get("profiles", [])
+        profiles = data["profiles"]
 
-        # ---------------- PRELOAD EXISTING NAMES (VERY IMPORTANT) ----------------
-        existing_names = set(
-            Profile.objects.values_list("name", flat=True)
-        )
+        created = 0
+        skipped = 0
 
-        new_objects = []
-        updated = 0
-
-        # ---------------- BUILD OBJECTS IN MEMORY ----------------
         for row in profiles:
             name = str(row["name"]).strip().lower()
 
-            if name in existing_names:
-                updated += 1
+            # ✅ prevent duplicates
+            if Profile.objects.filter(name=name).exists():
+                skipped += 1
                 continue
 
-            obj = Profile(
+            Profile.objects.create(
                 id=uuid7(),
                 name=name,
                 gender=row["gender"],
-                gender_probability=row["gender_probability"],
-                age=row["age"],
+                gender_probability=float(row["gender_probability"]),
+                age=int(row["age"]),
                 age_group=row["age_group"],
                 country_id=row["country_id"],
                 country_name=row["country_name"],
-                country_probability=row["country_probability"],
+                country_probability=float(row["country_probability"]),
             )
 
-            new_objects.append(obj)
-
-        # ---------------- BULK INSERT (FASTEST PART) ----------------
-        with transaction.atomic():
-            Profile.objects.bulk_create(new_objects, batch_size=1000)
+            created += 1
 
         self.stdout.write(self.style.SUCCESS(
-            f"Done → Created: {len(new_objects)}, Skipped existing: {updated}"
+            f"Done → Created: {created}, Skipped: {skipped}"
         ))

@@ -1,12 +1,9 @@
 import time
 import random
 from datetime import datetime, timezone
-import httpx
-
+import uuid
 def uuid7():
-    ts = int(time.time() * 1000)
-    rand = random.getrandbits(80)
-    return f"{ts:012x}-{rand:020x}"
+    return str(uuid.uuid4())  # safe fallback
 
 def now_iso():
     return datetime.now(timezone.utc)
