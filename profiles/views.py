@@ -1,64 +1,26 @@
 import re
-from .models import Profile
-from .utils.seed import ensure_seed
-from .utils.response import success, error
-from .utils.helpers import clean_str, safe_int
+from django.http import JsonResponse
+from profiles.models import Profile
+from profiles.core.seed import ensure_seed
+from profiles.core.serializers import serialize_profile
+from profiles.core.pagination import paginate
+from profiles.core.validators import clean_str, safe_int
 
 
-# -----------------------
-# SERIALIZER
-# -----------------------
-def serialize(p):
-    return {
-        "id": p.id,
-        "name": p.name,
-        "gender": p.gender,
-        "gender_probability": p.gender_probability,
-        "age": p.age,
-        "age_group": p.age_group,
-        "country_id": p.country_id,
-        "country_name": p.country_name,
-        "country_probability": p.country_probability,
-        "created_at": p.created_at.isoformat()
-    }
+def error(code, message, status=400):
+    return JsonResponse({
+        "error": {
+            "code": code,
+            "message": message
+        }
+    }, status=status)
 
 
-# -----------------------
-# PAGINATION ENGINE
-# -----------------------
-def paginate(qs, page, limit):
-    try:
-        page = int(page)
-    except:
-        page = 1
-
-    try:
-        limit = int(limit)
-    except:
-        limit = 10
-
-    if page < 1:
-        page = 1
-
-    if limit < 1:
-        limit = 1
-
-    if limit > 50:
-        limit = 50
-
-    total = qs.count()
-
-    start = (page - 1) * limit
-    end = start + limit
-
-    data = list(qs[start:end])
-
-    return data, {
-        "page": page,
-        "limit": limit,
-        "total": total,
-        "pages": (total + limit - 1) // limit if total else 1
-    }
+def success(data, pagination=None):
+    payload = {"data": data}
+    if pagination:
+        payload["pagination"] = pagination
+    return JsonResponse(payload)
 
 
 # =========================
@@ -69,14 +31,13 @@ def get_profiles(request):
 
     qs = Profile.objects.all()
 
-    # FILTERS
     gender = clean_str(request.GET.get("gender"))
     if gender:
         qs = qs.filter(gender=gender)
 
-    country_id = clean_str(request.GET.get("country_id")).upper()
-    if country_id:
-        qs = qs.filter(country_id=country_id)
+    country = clean_str(request.GET.get("country_id")).upper()
+    if country:
+        qs = qs.filter(country_id=country)
 
     min_age = safe_int(request.GET.get("min_age"))
     max_age = safe_int(request.GET.get("max_age"))
@@ -95,9 +56,6 @@ def get_profiles(request):
     if sort_by and sort_by not in allowed:
         return error("INVALID_SORT", "Invalid sort_by value", 400)
 
-    if order not in ["asc", "desc", ""]:
-        return error("INVALID_QUERY", "Invalid query parameters", 422)
-
     if order == "desc":
         sort_by = "-" + sort_by
 
@@ -108,7 +66,7 @@ def get_profiles(request):
     limit = request.GET.get("limit", 10)
 
     data, pagination = paginate(qs, page, limit)
-    data = [serialize(x) for x in data]
+    data = [serialize_profile(p) for p in data]
 
     return success(data, pagination)
 
@@ -160,11 +118,10 @@ def search_profiles(request):
     if not parsed:
         return error("UNINTERPRETABLE_QUERY", "Unable to interpret query", 422)
 
-    # PAGINATION
     page = request.GET.get("page", 1)
     limit = request.GET.get("limit", 10)
 
     data, pagination = paginate(qs, page, limit)
-    data = [serialize(x) for x in data]
+    data = [serialize_profile(p) for p in data]
 
     return success(data, pagination)

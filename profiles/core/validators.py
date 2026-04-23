@@ -9,10 +9,3 @@ def safe_int(v):
         return int(v)
     except:
         return None
-
-
-def safe_float(v):
-    try:
-        return float(v)
-    except:
-        return None
