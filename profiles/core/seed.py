@@ -1,27 +1,27 @@
+import json
+from django.conf import settings
 from profiles.models import Profile
-from data.seed import PROFILES
 
 
 def ensure_seed():
     if Profile.objects.exists():
         return
 
+    with open(settings.BASE_DIR / "data/seed.json") as f:
+        data = json.load(f)["profiles"]
+
     objs = []
 
-    for p in PROFILES:
-        try:
-            objs.append(Profile(
-                name=str(p["name"]).strip().lower(),
-                gender=str(p["gender"]).lower(),
-                gender_probability=float(p["gender_probability"]),
-                age=int(p["age"]),
-                age_group=str(p["age_group"]).lower(),
-                country_id=str(p["country_id"]).upper(),
-                country_name=str(p["country_name"]),
-                country_probability=float(p["country_probability"]),
-            ))
-        except:
-            continue
+    for p in data:
+        objs.append(Profile(
+            name=p["name"].strip().lower(),
+            gender=p["gender"],
+            gender_probability=p["gender_probability"],
+            age=p["age"],
+            age_group=p["age_group"],
+            country_id=p["country_id"],
+            country_name=p["country_name"],
+            country_probability=p["country_probability"],
+        ))
 
-    if objs:
-        Profile.objects.bulk_create(objs)
+    Profile.objects.bulk_create(objs)

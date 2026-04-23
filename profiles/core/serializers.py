@@ -1,6 +1,6 @@
-def serialize_profile(p):
+def serialize(p):
     return {
-        "id": p.id,
+        "id": str(p.id),
         "name": p.name,
         "gender": p.gender,
         "gender_probability": p.gender_probability,

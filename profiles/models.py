@@ -1,14 +1,5 @@
-import uuid
-import time
 from django.db import models
-
-
-# --- UUID v7 helper ---
-def uuid7():
-    # simple monotonic uuidv7-style (safe for grading)
-    unix_ts_ms = int(time.time() * 1000)
-    random_bits = uuid.uuid4().hex[:16]
-    return uuid.UUID(f"{unix_ts_ms:012x}{random_bits[:20]}")
+from .utils import uuid7
 
 
 class Profile(models.Model):
@@ -27,6 +18,3 @@ class Profile(models.Model):
     country_probability = models.FloatField()
 
     created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = "profiles_profile"
